@@ -21,6 +21,8 @@ jobs:
       BIBER_VERSION: ${{ inputs.biber_version }}
       TAG: ${{ inputs.tag }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: Download and rename
         run: |
           set -euo pipefail
@@ -82,3 +84,24 @@ jobs:
             --title "biber ${BIBER_VERSION}" \
             --notes-file notes.md \
             --target "$GITHUB_SHA"
+
+      - name: Generate installers
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          npx --yes ingen-cli@0.4.0 sync installer.manifest.json --app-version "${TAG#v}"
+          npx --yes ingen-cli@0.4.0 generate installer.manifest.json installers
+          ls installers
+
+      - name: Test installer
+        run: |
+          set -euo pipefail
+          BIBER_UNMANAGED_INSTALL="$RUNNER_TEMP/bin" sh installers/installer.sh
+          "$RUNNER_TEMP/bin/biber" --version
+
+      - name: Upload installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release upload "$TAG" installers/* --clobber
